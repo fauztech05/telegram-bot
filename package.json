@@ -10,19 +10,24 @@
   },
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json",
+    "dev": "node init && tsx watch src/index.ts",
+    "start": "node init && node dist/index.js",
+    "build": "node init && tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lockfile:check": "node scripts/check-lockfile.mjs",
     "lockfile:reproduce": "node scripts/check-lockfile.mjs --reproduce",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "scan": "tsx src/stellar/events.ts"
+    "test:mock": "npm run build && node --test tests/mock-*.test.mjs",
+    "scan": "tsx src/stellar/events.ts",
+    "scan:mock": "tsx src/stellar/events.ts --mock",
+    "mock:rpc": "tsx src/stellar/mock-rpc.ts",
+    "mock:poll": "tsx src/mock-run.ts"
   },
   "dependencies": {
     "@stellar/stellar-sdk": "^16.2.0",
     "dotenv": "^16.4.5",
-    "grammy": "^1.30.0"
+    "grammy": "^1.30.0",
+    "node-fetch": "^3.3.2"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
