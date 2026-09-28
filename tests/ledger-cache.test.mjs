@@ -51,66 +51,71 @@ const TIP = { oldestLedger: 4_000, latestLedger: 5_000 };
 
 test("ledger cache: one getHealth per ttl window, reused across callers", async () => {
   const cache = new LedgerCache({ ttlMs: 1_000 });
-  const { server, healthCalls } = countingServer();
+  const counters = countingServer();
+  const { server } = counters;
 
   const first = await cache.get(server);
   const second = await cache.get(server);
 
   assert.deepEqual(first, TIP);
   assert.deepEqual(second, TIP);
-  assert.equal(healthCalls, 1, "second read must come from the cache");
+  assert.equal(counters.healthCalls, 1, "second read must come from the cache");
   assert.deepEqual(cache.stats(), { hits: 1, misses: 1 });
 });
 
 test("ledger cache: reset forces a refetch (one fetch per poll cycle)", async () => {
   const cache = new LedgerCache({ ttlMs: 1_000 });
-  const { server, healthCalls } = countingServer();
+  const counters = countingServer();
+  const { server } = counters;
 
   await cache.get(server);
   cache.reset();
   assert.equal(cache.peek(), null, "reset must drop the cached tip");
   await cache.get(server);
 
-  assert.equal(healthCalls, 2);
+  assert.equal(counters.healthCalls, 2);
   assert.deepEqual(cache.stats(), { hits: 0, misses: 2 });
 });
 
 test("ledger cache: concurrent callers share one in-flight request", async () => {
   const cache = new LedgerCache({ ttlMs: 1_000 });
-  const { server, healthCalls } = countingServer({ delayMs: 20 });
+  const counters = countingServer({ delayMs: 20 });
+  const { server } = counters;
 
   const results = await Promise.all([cache.get(server), cache.get(server), cache.get(server)]);
 
-  assert.equal(healthCalls, 1, "a burst must coalesce onto one getHealth");
+  assert.equal(counters.healthCalls, 1, "a burst must coalesce onto one getHealth");
   assert.deepEqual(cache.stats(), { hits: 2, misses: 1 });
   for (const result of results) assert.deepEqual(result, TIP);
 });
 
 test("ledger cache: a failed fetch is not cached and the next caller retries", async () => {
   const cache = new LedgerCache({ ttlMs: 1_000 });
-  const { server, healthCalls } = countingServer({ failHealthTimes: 1 });
+  const counters = countingServer({ failHealthTimes: 1 });
+  const { server } = counters;
 
   await assert.rejects(() => cache.get(server), /getHealth down/);
   assert.equal(cache.peek(), null, "a failure must not populate the cache");
 
   const tip = await cache.get(server);
   assert.deepEqual(tip, TIP);
-  assert.equal(healthCalls, 2, "the retry must reach getHealth again");
+  assert.equal(counters.healthCalls, 2, "the retry must reach getHealth again");
 });
 
 test("ledger cache: ttl expiry refetches against the injected clock", async () => {
   let now = 0;
   const cache = new LedgerCache({ ttlMs: 1_000, now: () => now });
-  const { server, healthCalls } = countingServer();
+  const counters = countingServer();
+  const { server } = counters;
 
   await cache.get(server);
   now = 999;
   await cache.get(server);
-  assert.equal(healthCalls, 1, "still inside the ttl");
+  assert.equal(counters.healthCalls, 1, "still inside the ttl");
 
   now = 1_000;
   await cache.get(server);
-  assert.equal(healthCalls, 2, "ttl boundary is exclusive");
+  assert.equal(counters.healthCalls, 2, "ttl boundary is exclusive");
 });
 
 test("ledger cache: the default ttl is positive", () => {
@@ -119,7 +124,8 @@ test("ledger cache: the default ttl is positive", () => {
 
 test("poller: two targets share one chain-tip fetch per cycle", async () => {
   const dir = await createTempDataDir("mimir-ledger-cache-");
-  const { server, healthCalls } = countingServer();
+  const counters = countingServer();
+  const { server } = counters;
 
   const poller = createPoller({
     config: {
@@ -152,7 +158,7 @@ test("poller: two targets share one chain-tip fetch per cycle", async () => {
 
     const status = poller.status();
     assert.ok(status.cycles >= 1, "one cycle ran");
-    assert.equal(healthCalls, 1, "two targets, one getHealth call");
+    assert.equal(counters.healthCalls, 1, "two targets, one getHealth call");
     assert.deepEqual(status.ledgerCache, { hits: 1, misses: 1 });
     assert.equal(status.latestLedger, 5_000);
     assert.equal(status.oldestLedger, 4_000);
